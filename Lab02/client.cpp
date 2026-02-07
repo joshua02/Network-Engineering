@@ -6,7 +6,7 @@
 #include <netinet/ip.h> //for INADDR_ANY
 #include <arpa/inet.h> //for inet_pton
 
-constexpr std::string IP{"192.168.1.70"}; //c++20 required to use constexpr std::string
+const std::string IP{"192.168.1.70"};
 constexpr int PORT{8080};
 
 
@@ -32,6 +32,15 @@ void client_socket() {
 	}
 
 	std::cout << "connected!\n";
+
+	int rx{};
+
+	while (true) {
+		if(recv(sock, (void*) &rx, sizeof(rx), 0) > 0) {
+			std::cout << "received:" << rx << '\n';
+		}
+	}
+
 
 }
 
