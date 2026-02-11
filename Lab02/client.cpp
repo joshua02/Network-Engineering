@@ -1,6 +1,9 @@
 #include <iostream>
 #include <exception>
 #include <string>
+#include <array>
+#include <sstream>
+#include <thread>
 
 #include <sys/socket.h>
 #include <netinet/ip.h> //for INADDR_ANY
@@ -33,15 +36,46 @@ void client_socket() {
 
 	std::cout << "connected!\n";
 
-	int rx{};
 
-	while (true) {
-		if(recv(sock, (void*) &rx, sizeof(rx), 0) > 0) {
-			std::cout << "received:" << rx << '\n';
+	auto rx_task = [&]() {
+		std::array<char, 128> rx_buffer{};
+		while (true) {
+			if(recv(sock, (void*) &rx_buffer, sizeof(rx_buffer), 0) > 0) {
+				std::stringstream rx{rx_buffer.data()};
+				int a{};
+				rx >> a;
+				std::cout << "received: " << a << '\n';
+			}
 		}
-	}
+	};
 
+	auto tx_task = [&]() {
+		while(true) {
+			std::array<char, 128> tx_buffer{};
+			std::string input{};
+			std::cin >> input;
+			if(input == "RATE") {
+				int value{};
+				std::cin >> value;
+				std::cout << "Sending command: RATE " << value << '\n';
+				std::string command{"RATE " + std::to_string(value)};
+				std::copy(command.begin(), command.end(), tx_buffer.begin());
+				send(sock, (void*) &tx_buffer, sizeof(tx_buffer), 0);
+			} else if(input == "SET") {
+				int value{};
+				std::cin >> value;
+				std::cout << "Sending command: SET " << value << '\n';
+				std::string command{"SET " + std::to_string(value)};
+				std::copy(command.begin(), command.end(), tx_buffer.begin());
+				send(sock, (void*) &tx_buffer, sizeof(tx_buffer), 0);
+			} else {
+				std::cout << "No command parsed: " << input << '\n';
+			}
+		}
+	};
 
+	std::jthread rx_thread{rx_task};
+	std::jthread tx_thread{tx_task};
 }
 
 int main() {
