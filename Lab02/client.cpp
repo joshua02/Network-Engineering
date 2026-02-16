@@ -9,8 +9,8 @@
 #include <netinet/ip.h> //for INADDR_ANY
 #include <arpa/inet.h> //for inet_pton
 
-const std::string IP{"192.168.1.70"};
-constexpr int PORT{8080};
+const std::string	IP{"192.168.1.70"};
+constexpr int 		PORT{8080};
 
 
 void client_socket() {
@@ -36,10 +36,10 @@ void client_socket() {
 
 	std::cout << "connected!\n";
 
-
+	//Receive data from server
 	auto rx_task = [&]() {
-		std::array<char, 128> rx_buffer{};
 		while (true) {
+			std::array<char, 128> rx_buffer{};
 			if(recv(sock, (void*) &rx_buffer, sizeof(rx_buffer), 0) > 0) {
 				std::stringstream rx{rx_buffer.data()};
 				int a{};
@@ -49,6 +49,7 @@ void client_socket() {
 		}
 	};
 
+	//Transmit data to server
 	auto tx_task = [&]() {
 		while(true) {
 			std::array<char, 128> tx_buffer{};
@@ -57,6 +58,12 @@ void client_socket() {
 			if(input == "RATE") {
 				int value{};
 				std::cin >> value;
+				//basic input sanitization
+				if(std::cin.fail()) {
+					std::cout << "Expected int\n";
+					std::cin.clear();
+					continue;
+				}
 				std::cout << "Sending command: RATE " << value << '\n';
 				std::string command{"RATE " + std::to_string(value)};
 				std::copy(command.begin(), command.end(), tx_buffer.begin());
@@ -64,6 +71,11 @@ void client_socket() {
 			} else if(input == "SET") {
 				int value{};
 				std::cin >> value;
+				if(std::cin.fail()) {
+					std::cout << "Expected int\n";
+					std::cin.clear();
+					continue;
+				}
 				std::cout << "Sending command: SET " << value << '\n';
 				std::string command{"SET " + std::to_string(value)};
 				std::copy(command.begin(), command.end(), tx_buffer.begin());

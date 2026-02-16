@@ -17,7 +17,8 @@ int create_server_socket() {
 	if (sock == -1) {
 		throw std::runtime_error{"failed to create socket"};
 	}
-	//Fill out server address struct, htons is needed to convert byte order
+
+	//Fill out server address struct, htons is needed to convert port byte order
 	struct sockaddr_in addr{AF_INET, htons(PORT), INADDR_ANY};
 
 	//Tell socket what it's address is
@@ -33,13 +34,18 @@ int create_server_socket() {
 	return sock;
 }
 
-void rx_loop(const std::vector<int>& sockets, int& counter, int& count_inc) {
+//Loops through all clients to check if a command was received, then process command
+void rx_from_clients(const std::vector<int>& sockets, int& counter, int& count_inc) {
 	std::array<char, 128> rx_buffer{};
 	for (auto it = sockets.begin(); it != sockets.end(); it++) {
+		//recv returns the length of bytes received or -1 for errors, greater than 0 indicates data received
+		//use MSG_DONTWAIT flag so the function call doesn't block
 		if(recv(*it, (void*) &rx_buffer, sizeof(rx_buffer), MSG_DONTWAIT) > 0) {
-			std::stringstream input{rx_buffer.data()};
+			//there should be some sort of input validation here
+			//but assume clients are nice and only send commands in the expected structure
 			std::string command{};
 			int value{};
+			std::stringstream input{rx_buffer.data()};
 			input >> command;
 			input >> value;
 			std::cout << "Received: " << command << " " << value << '\n';
@@ -60,6 +66,7 @@ void broadcast_to_sockets(std::vector<int>& sockets, int counter) {
 	std::copy(ascii_count.begin(), ascii_count.end(), tx_buffer.begin());
 
 	for (auto it = sockets.begin(); it != sockets.end(); ) {
+		//use MSG_NOSIGNAL flag so that the SIGPIPE isn't asserted which would terminate the program
 		if(send(*it, (void*) &tx_buffer, sizeof(tx_buffer), MSG_NOSIGNAL) < 0) {
 			close(*it);
 			it = sockets.erase(it);
@@ -80,16 +87,22 @@ int main() {
 	int count_inc{1};
 	bool counter_enabled{true};
 
+	//every second, check if data was received from clients and process,
+	//increment counter, and transmit new value to all clients
 	auto count_task = [&]() {
 		using namespace std::chrono_literals;
 		while (counter_enabled) {
-			rx_loop(client_sockets, counter, count_inc);
+			//important that rx_from_clients and broadcast_to_sockets are being called in the same thread
+			//if implemented in different threads, would need a mutex to prevent iterating through
+			//the sockets vector at the same time
+			rx_from_clients(client_sockets, counter, count_inc);
 			counter += count_inc;
 			broadcast_to_sockets(client_sockets, counter);
 			std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
 		}
 	};
 
+	//accept() is blocking needs its own thread
 	auto accept_client_task = [&]() {
 		while (accept_clients) {
 			struct sockaddr_in client_addr{};
@@ -105,12 +118,16 @@ int main() {
 	};
 
 	try {
+		//std::jthread automatically joins when destroyed, count_task and accept_client_task
+		//contain infinite loops which won't let the thread join. Both tasks will run until the
+		//program is manually terminated with CTRL+C or its process is killed
 		std::jthread count_thread{count_task};
 		server_sock = create_server_socket();
-		std::cout << "Listening on port " << PORT << '\n';
+		std::cout << "Listening on port: " << PORT << '\n';
 		std::jthread accept_client_thread{accept_client_task};
 	} catch (std::exception& e) {
+		//error handling
 		std::cerr << e.what() << '\n';
 	}
-	//TODO: close sockets
+	//TODO: server socket and remaining client sockets should be closed when manually terminated
 }
