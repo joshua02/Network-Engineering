@@ -9,7 +9,7 @@
 #include <netinet/ip.h> //for INADDR_ANY
 #include <arpa/inet.h> //for inet_pton
 
-const std::string	IP{"192.168.1.70"};
+const std::string	IP{"146.163.133.27"};
 constexpr int 		PORT{8080};
 
 
